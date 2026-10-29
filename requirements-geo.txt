@@ -1,0 +1,4 @@
+# Optional geolocation backend.
+# Install only if you set GEO_PROVIDER=maxmind, and place the GeoLite2-City.mmdb
+# file somewhere the process can read. The visitor IP is never sent anywhere.
+geoip2>=4.8,<6.0
