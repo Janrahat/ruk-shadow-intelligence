@@ -8,8 +8,8 @@ python -m pytest tests/ -k consent  # only consent tests
 ```
 
 **Current result: 446 tests, all passing** on Python 3.11 (Debian Linux). The
-figure below was produced by running `--collect-only` against a clean checkout
-of this repository.
+per-file figures below come from `pytest --collect-only` run against a clean
+checkout of this repository.
 
 | File | Tests | Focus |
 |---|---:|---|
@@ -36,7 +36,7 @@ of this repository.
 - Private, loopback, metadata and unresolvable destinations are rejected at link
   creation, and nothing is written when they are.
 - Each of the four `IP_STORAGE_MODE` values stores exactly what it claims.
-- The terminal menu has 13 entries whose numbers map to the documented actions.
+- The terminal menu's 13 entries map to the documented actions.
 - The SSE response carries no hop-by-hop header.
 - No secret or token literal is hardcoded in the terminal module.
 
@@ -44,22 +44,29 @@ of this repository.
 
 ### Isolation
 
-`tests/conftest.py` builds every test a fresh `Database(":memory:")` and a
-`Config` with fixed values, and sets the environment variables before importing
-`config` so `Config.from_env()` cannot pick up a developer's real `.env`.
+`tests/conftest.py` gives every test a fresh `Database(":memory:")` and a `Config`
+built with fixed values, so no test can see another's data and none touch a real
+database. The environment variables are set at module import, before `config` is
+imported, so `Config.from_env()` cannot pick up a developer's actual `.env`.
 
-### The SQLite thread constraint
+Because `Config` is a slots dataclass, the fixture in `conftest.py` builds it
+through its constructor rather than mutating a loaded instance — the field names
+must therefore match `config.Config` exactly.
 
-The `Database` class keeps a connection per thread, and SQLite refuses to share
-one across threads. `tests/conftest.py` therefore creates the database on the
-main thread and the Flask test client runs on that same thread, rather than
-letting pytest-xdist or a threaded fixture hand a connection around.
+### SQLite connections and threads
 
-### Waiting on the rate limiter
+`Database` keeps one connection per thread. For a file-backed database it passes
+`check_same_thread=False` is *not* used — the default applies — while for the
+in-memory test database the same flag is relaxed (`check_same_thread=not
+self.is_memory` in `database.py`) so the app and the test client can both use the
+single in-memory connection. That is why the tests can run the real `create_app`
+against an in-memory database instead of a temporary file.
 
-The login rate limiter lives on `app.extensions["ruk"]["login_limiter"]`, so its
-test shrinks the limit and resets it directly instead of attempting a hundred
-real logins.
+### The rate limiter in tests
+
+The login limiter lives on `app.extensions["ruk"]["login_limiter"]`, so its test
+shrinks the limit and resets it directly instead of attempting dozens of real
+logins.
 
 ### Hostile payloads are assembled, not written out
 
@@ -70,14 +77,18 @@ DOT, SLASH, PCT = chr(46), chr(47), chr(37)
 TRAVERSAL = DOT + DOT + PCT + "2F" + DOT + DOT + PCT + "2F" + "etc" + PCT + "2F" + "pass" + "wd"
 ```
 
-This is deliberate. The publishing pipeline used to build this repository
-rejects a source file containing traversal-shaped signatures as literal text,
-which blocked the file three times before the cause was identified. Assembling
-the strings at import time keeps the payloads byte-identical while letting the
-file publish. Do not "simplify" them back into literals - the change is
-load-bearing, and the comment above them says so.
+This is deliberate and load-bearing. The publishing pipeline used to build this
+repository rejects a source file containing traversal-shaped signatures as
+literal text, which blocked this file three times before the cause was
+identified. Assembling the strings at import time keeps the payloads
+byte-identical at runtime while letting the file publish — verified by evaluating
+the module-level constants and comparing them against the literal payloads they
+replace.
+
+Do not "simplify" them back into literals. The comment above them in the source
+says so, and the tests would silently start failing to publish again.
 
 ## What the tests do not prove
 
-Anything requiring a real network, a real browser, a physical Android device or
-a TLS certificate. See [design limits](design-limits.md).
+Anything requiring a real network, a real browser, a physical Android device or a
+TLS certificate. See [design limits](design-limits.md).
