@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Campaigns · {{ product_name }}{% endblock %}
+{% block body_class %}page-admin{% endblock %}
+
+{% block content %}
+<div class="admin-head">
+  <div>
+    <p class="eyebrow">Grouping</p>
+    <h1>Campaigns</h1>
+  </div>
+</div>
+
+{% if error %}<div class="alert alert-error" role="alert">{{ error }}</div>{% endif %}
+
+<section class="panel">
+  <div class="panel-head"><h2>New campaign</h2></div>
+  <form method="post" action="{{ url_for('admin_campaigns') }}" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label class="field">
+      <span>Name <em>(required)</em></span>
+      <input name="name" type="text" required maxlength="80" placeholder="Autumn launch">
+    </label>
+    <label class="field field-wide">
+      <span>Description <em>(optional)</em></span>
+      <input name="description" type="text" maxlength="500">
+    </label>
+    <div class="field"><button class="btn btn-primary" type="submit">Create campaign</button></div>
+  </form>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>Performance</h2>
+    <span class="muted small">{{ performance|length }} campaign(s)</span>
+  </div>
+  {% if performance %}
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Campaign</th><th>Slug</th><th>Links</th><th>Visits</th><th>Visitors</th><th>Last event</th><th>State</th></tr>
+        </thead>
+        <tbody>
+          {% for row in performance %}
+            <tr>
+              <td>{{ row.name }}</td>
+              <td><code>{{ row.slug }}</code></td>
+              <td>{{ row.links }}</td>
+              <td>{{ row.events }}</td>
+              <td>{{ row.visitors }}</td>
+              <td>{{ row.last_event or '—' }}</td>
+              <td>
+                {% if row.is_archived %}<span class="chip chip-revoked">archived</span>
+                {% else %}<span class="chip chip-active">live</span>{% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="muted">No campaigns yet.</p>
+  {% endif %}
+</section>
+
+<section class="panel">
+  <div class="panel-head"><h2>All campaigns</h2></div>
+  {% if campaigns %}
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Name</th><th>Slug</th><th>Links</th><th>Visits</th><th>Created</th><th></th></tr></thead>
+        <tbody>
+          {% for campaign in campaigns %}
+            <tr>
+              <td>{{ campaign.name }}</td>
+              <td><code>{{ campaign.slug }}</code></td>
+              <td>{{ campaign.link_count }}</td>
+              <td>{{ campaign.total_events }}</td>
+              <td>{{ campaign.created_at }}</td>
+              <td>
+                {% if not campaign.is_archived %}
+                  <form method="post" action="{{ url_for('admin_archive_campaign', campaign_id=campaign.id) }}" class="inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button class="link-btn" type="submit">archive</button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="muted">No campaigns yet.</p>
+  {% endif %}
+</section>
+{% endblock %}
