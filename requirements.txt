@@ -1,0 +1,10 @@
+flask>=3.0,<4.0
+waitress>=3.0,<4.0
+rich>=13.7,<15.0
+requests>=2.31,<3.0
+qrcode[pil]>=7.4,<9.0
+pillow>=10.0,<12.0
+argon2-cffi>=23.1,<26.0
+
+# Development / testing only
+pytest>=8.0,<9.0
