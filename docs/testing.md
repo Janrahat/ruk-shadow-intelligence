@@ -49,18 +49,23 @@ built with fixed values, so no test can see another's data and none touch a real
 database. The environment variables are set at module import, before `config` is
 imported, so `Config.from_env()` cannot pick up a developer's actual `.env`.
 
-Because `Config` is a slots dataclass, the fixture in `conftest.py` builds it
-through its constructor rather than mutating a loaded instance — the field names
-must therefore match `config.Config` exactly.
+`Config` is a slots dataclass, so the fixture builds it through its constructor
+rather than mutating a loaded instance; the field names passed in it must match
+`config.Config` exactly.
 
 ### SQLite connections and threads
 
-`Database` keeps one connection per thread. For a file-backed database it passes
-`check_same_thread=False` is *not* used — the default applies — while for the
-in-memory test database the same flag is relaxed (`check_same_thread=not
-self.is_memory` in `database.py`) so the app and the test client can both use the
-single in-memory connection. That is why the tests can run the real `create_app`
-against an in-memory database instead of a temporary file.
+`Database` opens one connection per thread. The connection is created with
+`check_same_thread=not self.is_memory` (see `database.py`):
+
+- for a **file-backed** database the flag stays `True`, so the default safety
+  check is kept and a connection is never used from the wrong thread;
+- for the **in-memory** test database the flag is relaxed, because an in-memory
+  SQLite database exists only for as long as its connection does, and the app
+  and the Flask test client must share that one connection.
+
+That is what allows the tests to run the real `create_app` against `":memory:"`
+instead of writing temporary files.
 
 ### The rate limiter in tests
 
@@ -86,7 +91,7 @@ the module-level constants and comparing them against the literal payloads they
 replace.
 
 Do not "simplify" them back into literals. The comment above them in the source
-says so, and the tests would silently start failing to publish again.
+says so, and the file would start failing to publish again.
 
 ## What the tests do not prove
 
