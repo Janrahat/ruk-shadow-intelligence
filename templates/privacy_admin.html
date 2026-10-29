@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Privacy controls · {{ product_name }}{% endblock %}
+{% block body_class %}page-admin{% endblock %}
+
+{% block content %}
+<div class="admin-head">
+  <div>
+    <p class="eyebrow">Data governance</p>
+    <h1>Privacy &amp; retention</h1>
+  </div>
+</div>
+
+{% if message %}<div class="alert alert-success">{{ message }}</div>{% endif %}
+
+<section class="stats">
+  {% for table, count in counts.items() %}
+    <div class="stat">
+      <span class="stat-label">{{ table.replace('_', ' ') }}</span>
+      <strong class="stat-value">{{ count }}</strong>
+    </div>
+  {% endfor %}
+</section>
+
+<section class="split">
+  <div class="panel">
+    <div class="panel-head"><h2>Retention</h2></div>
+    <p>
+      Default window: <strong>{{ retention_limits.days }} days</strong>.
+      Individual links may request a shorter one.
+    </p>
+    <form method="post" action="{{ url_for('admin_privacy') }}" class="stack">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="action" value="purge">
+      <label class="field">
+        <span>Delete events older than (days)</span>
+        <input name="days" type="number" min="1" max="3650" value="{{ default_retention }}">
+      </label>
+      <button class="btn btn-primary" type="submit">Run retention purge</button>
+    </form>
+    <p class="muted small">
+      This also deletes every event behind an already-expired link. Nothing is
+      soft-deleted; the rows are removed from the database.
+    </p>
+  </div>
+
+  <div class="panel panel-warn">
+    <div class="panel-head"><h2>Erasure</h2></div>
+    <p>These actions are permanent and are written to the audit log.</p>
+
+    <form method="post" action="{{ url_for('admin_privacy') }}" class="stack"
+          onsubmit="return confirm('Delete ALL analytics events? This cannot be undone.');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="action" value="wipe_events">
+      <button class="btn btn-danger" type="submit">Delete all events</button>
+    </form>
+
+    <form method="post" action="{{ url_for('admin_privacy') }}" class="stack"
+          onsubmit="return confirm('Delete every event for this link?');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="action" value="wipe_link">
+      <label class="field">
+        <span>Tracking ID</span>
+        <input name="tracking_id" type="text" maxlength="64" required placeholder="abc123">
+      </label>
+      <button class="btn btn-danger" type="submit">Delete events for this link</button>
+    </form>
+
+    <form method="post" action="{{ url_for('admin_privacy') }}" class="stack"
+          onsubmit="return confirm('Erase every event for this visitor and withdraw consent?');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <input type="hidden" name="action" value="erase_visitor">
+      <label class="field">
+        <span>Visitor token</span>
+        <input name="visitor_token" type="text" maxlength="64" required>
+      </label>
+      <button class="btn btn-danger" type="submit">Erase this visitor</button>
+    </form>
+  </div>
+</section>
+
+<section class="split">
+  <div class="panel">
+    <div class="panel-head"><h2>Consent records</h2></div>
+    <p>
+      Granted: <strong>{{ consent.granted }}</strong> ·
+      Declined: <strong>{{ consent.declined }}</strong>
+    </p>
+    <p class="muted small">
+      A decline is recorded so the operator can see how often visitors refuse.
+      No analytics event is stored for a decline.
+    </p>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h2>Active collection policy</h2></div>
+    <dl class="meta-grid">
+      <div><dt>IP storage</dt><dd><code>{{ notice.ip_policy }}</code></dd></div>
+      <div><dt>Geolocation</dt><dd>{{ geo_status }}</dd></div>
+      <div><dt>Policy version</dt><dd>{{ notice.policy_version }}</dd></div>
+      <div><dt>Retention</dt><dd>{{ notice.retention_days }} days</dd></div>
+    </dl>
+    <p class="muted small">{{ notice.ip_notice }}</p>
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head"><h2>Audit log</h2></div>
+  {% if audit %}
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Detail</th></tr></thead>
+        <tbody>
+          {% for entry in audit %}
+            <tr>
+              <td class="nowrap">{{ entry.created_at }}</td>
+              <td>{{ entry.actor }}</td>
+              <td><code>{{ entry.action }}</code></td>
+              <td class="truncate">{{ entry.detail }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="muted">No audit entries yet.</p>
+  {% endif %}
+</section>
+{% endblock %}

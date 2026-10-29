@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Events · {{ product_name }}{% endblock %}
+{% block body_class %}page-admin{% endblock %}
+
+{% block content %}
+<div class="admin-head">
+  <div>
+    <p class="eyebrow">Recorded visits</p>
+    <h1>Analytics events</h1>
+  </div>
+  <div class="head-actions">
+    <a class="btn btn-ghost btn-sm" href="{{ url_for('admin_export', format='csv', since=filters.since) }}">Export CSV</a>
+    <a class="btn btn-ghost btn-sm" href="{{ url_for('admin_export', format='json', since=filters.since) }}">Export JSON</a>
+  </div>
+</div>
+
+<section class="panel">
+  <form method="get" action="{{ url_for('admin_events') }}" class="filter-bar">
+    <label class="field">
+      <span>Search</span>
+      <input name="q" type="search" value="{{ filters.q }}" maxlength="64"
+             placeholder="campaign, country, browser…">
+    </label>
+    <label class="field">
+      <span>Device</span>
+      <select name="device">
+        <option value="">any</option>
+        {% for option in ['mobile', 'tablet', 'desktop', 'unknown'] %}
+          <option value="{{ option }}" {% if filters.device == option %}selected{% endif %}>{{ option }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="field">
+      <span>Consent</span>
+      <select name="consent">
+        <option value="">any</option>
+        {% for option in ['granted', 'declined'] %}
+          <option value="{{ option }}" {% if filters.consent == option %}selected{% endif %}>{{ option }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label class="field">
+      <span>Since</span>
+      <input name="since" type="date" value="{{ filters.since }}">
+    </label>
+    <div class="field field-btn">
+      <button class="btn btn-primary btn-sm" type="submit">Filter</button>
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('admin_events') }}">Clear</a>
+    </div>
+  </form>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>{{ total }} event(s)</h2>
+    <span class="muted small">page {{ page }} of {{ pages }}</span>
+  </div>
+
+  {% if events %}
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>Time (UTC)</th><th>Tracking ID</th><th>Campaign</th><th>Location</th>
+            <th>Browser</th><th>OS</th><th>Device</th><th>Consent</th><th>Unique</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for event in events %}
+            <tr>
+              <td class="nowrap">{{ event.created_at }}</td>
+              <td><code>{{ event.tracking_id }}</code></td>
+              <td>{{ event.campaign_name or '—' }}</td>
+              <td title="approximate, derived from IP">{{ event.location_label }}</td>
+              <td>{{ event.browser_family }} {{ event.browser_version }}</td>
+              <td>{{ event.os_family }} {{ event.os_version }}</td>
+              <td><span class="chip chip-{{ event.device_category }}">{{ event.device_category }}</span></td>
+              <td><span class="chip chip-consent">{{ event.consent_status }}</span></td>
+              <td>{% if event.is_unique %}yes{% else %}no{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <nav class="pager" aria-label="Pagination">
+      {% if page > 1 %}
+        <a class="btn btn-ghost btn-sm" href="{{ url_for('admin_events', page=page-1, q=filters.q, device=filters.device, consent=filters.consent, since=filters.since) }}">Previous</a>
+      {% endif %}
+      <span class="muted small">page {{ page }} / {{ pages }}</span>
+      {% if page < pages %}
+        <a class="btn btn-ghost btn-sm" href="{{ url_for('admin_events', page=page+1, q=filters.q, device=filters.device, consent=filters.consent, since=filters.since) }}">Next</a>
+      {% endif %}
+    </nav>
+  {% else %}
+    <p class="muted">No events match these filters.</p>
+  {% endif %}
+</section>
+
+<p class="muted small">
+  Location is approximate and derived from the IP address only. It never identifies a person.
+</p>
+{% endblock %}
