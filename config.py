@@ -1,77 +1,49 @@
-@"""Configuration loading and validation.
+"""Configuration loading for RUK SHADOW INTELLIGENCE.
 
-The whole application reads its settings from here, so this module is the one
-place where a bad deployment can be caught. In production it refuses to start
-with an insecure configuration rather than warning and continuing.
+All secrets come from the environment (or a .env file that is never committed).
+Nothing sensitive is ever written into source code.
 """
 from __future__ import annotations
 
 import os
+import secrets
 from dataclasses import dataclass, field
 from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parent
 
-class ConfigError(RuntimeError):
-    """Raised when the environment cannot describe a safe deployment."""
-
-
-VALID_ENVS = {"development", "production", "test"}
 VALID_IP_MODES = {"full", "truncated", "hashed", "none"}
 VALID_GEO_PROVIDERS = {"none", "maxmind", "http"}
-
-MIN_SECRET_LENGTH = 32
-LOCAL_SECRET_FILE = ".ruk_secret"
-
-TRUTHY = {"1", "true", "yes", "on", "y", "t"}
-FALSY = {"0", "false", "no", "off", "n", "f", ""}
+VALID_ENVS = {"development", "production", "testing"}
 
 
-# ---------------------------------------------------------------------------
-# .env loading
-# ---------------------------------------------------------------------------
-def load_dotenv(path: str | Path = ".env", override: bool = False) -> int:
-    """Minimal .env reader.
+class ConfigError(RuntimeError):
+    """Raised when the configuration cannot be used safely."""
 
-    Real dotenv packages exist, but this keeps the dependency list short and the
-    behaviour obvious: `KEY=value`, optional surrounding quotes, `#` comments,
-    blank lines ignored. Returns the number of variables set.
+
+def load_dotenv_file(path: Path | None = None) -> bool:
+    """Load a .env file if python-dotenv is installed.
+
+    Returns True when the file existed and was parsed. Real environment
+    variables always win over the file because override=False is used.
     """
-    file_path = Path(path)
-    if not file_path.is_file():
-        return 0
-
-    count = 0
+    path = path or (PROJECT_ROOT / ".env")
+    if not path.exists():
+        return False
     try:
-        raw = file_path.read_text(encoding="utf-8")
-    except OSError:
-        return 0
-
-    for line in raw.splitlines():
-        line = line.strip()
-        if not line or line.startswith("#"):
-            continue
-        if line.startswith("export "):
-            line = line[7:].lstrip()
-        if "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        key = key.strip()
-        if not key or not key.replace("_", "").isalnum():
-            continue
-        value = value.strip()
-        # Only strip matching quote pairs, so a password containing a quote at
-        # one end is not silently altered.
-        if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
-            value = value[1:-1]
-        if override or key not in os.environ:
-            os.environ[key] = value
-            count += 1
-    return count
+        from dotenv import load_dotenv  # type: ignore
+    except ImportError:  # pragma: no cover - optional dependency
+        for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            line = raw.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            os.environ.setdefault(key.strip(), value.strip().strip("'\""))
+        return True
+    load_dotenv(path, override=False)
+    return True
 
 
-# ---------------------------------------------------------------------------
-# Typed readers
-# ---------------------------------------------------------------------------
 def _env_str(name: str, default: str = "") -> str:
     value = os.environ.get(name)
     if value is None:
@@ -79,76 +51,31 @@ def _env_str(name: str, default: str = "") -> str:
     return value.strip()
 
 
-def _env_int(name: str, default: int, minimum: int | None = None,
-             maximum: int | None = None) -> int:
-    raw = os.environ.get(name)
-    if raw is None or raw.strip() == "":
-        return default
-    try:
-        value = int(str(raw).strip())
-    except (TypeError, ValueError) as exc:
-        raise ConfigError(f"{name} must be a whole number (got {raw!r})") from exc
-    if minimum is not None and value < minimum:
-        raise ConfigError(f"{name} must be at least {minimum} (got {value})")
-    if maximum is not None and value > maximum:
-        raise ConfigError(f"{name} must be at most {maximum} (got {value})")
-    return value
-
-
 def _env_bool(name: str, default: bool = False) -> bool:
-    raw = os.environ.get(name)
-    if raw is None:
+    raw = _env_str(name, "").lower()
+    if not raw:
         return default
-    lowered = str(raw).strip().lower()
-    if lowered in TRUTHY:
-        return True
-    if lowered in FALSY:
-        return False
-    raise ConfigError(f"{name} must be true or false (got {raw!r})")
+    return raw in {"1", "true", "yes", "on"}
 
 
-def _looks_like_placeholder(value: str) -> bool:
-    """Detect the sample values people forget to replace."""
-    lowered = value.lower()
-    return any(
-        marker in lowered
-        for marker in ("change-me", "changeme", "your-", "replace", "example.com")
-    )
-
-
-def _load_or_create_local_secret() -> tuple[str, str]:
-    """Development fallback: persist a generated key outside the repo.
-
-    Written with mode 0600 so another local user cannot read the session key.
-    """
-    import secrets
-
-    path = Path(LOCAL_SECRET_FILE)
-    if path.is_file():
-        try:
-            existing = path.read_text(encoding="utf-8").strip()
-            if len(existing) >= MIN_SECRET_LENGTH:
-                return existing, "file"
-        except OSError:
-            pass
-
-    generated = secrets.token_hex(32)
+def _env_int(name: str, default: int) -> int:
+    raw = _env_str(name, "")
+    if not raw:
+        return default
     try:
-        path.write_text(generated + "\n", encoding="utf-8")
-        os.chmod(path, 0o600)
-    except OSError:
-        # A read-only working directory is not fatal in development: the key
-        # still works for this process, it just will not survive a restart.
-        return generated, "ephemeral"
-    return generated, "file"
+        return int(raw)
+    except ValueError as exc:
+        raise ConfigError(f"{name} must be an integer, got {raw!r}") from exc
 
 
-# ---------------------------------------------------------------------------
-# Config
-# ---------------------------------------------------------------------------
-@dataclass(slots=True)
+@dataclass
 class Config:
-    """Validated, immutable-ish application settings."""
+    """Resolved runtime configuration.
+
+    ``warnings`` collects non-fatal policy problems so callers (CLI, terminal
+    UI) can surface them honestly instead of silently running in a weaker mode
+    than the operator expects.
+    """
 
     env: str = "development"
     secret_key: str = ""
@@ -159,7 +86,7 @@ class Config:
     public_base_url: str = "http://127.0.0.1:8000"
     require_https_links: bool = False
 
-    database_file: str = "data/ruk.db"
+    database_path: str = "data/ruk_shadow.db"
     trust_proxy_headers: bool = False
 
     ip_storage_mode: str = "full"
@@ -184,62 +111,39 @@ class Config:
 
     warnings: list[str] = field(default_factory=list)
 
-    # -- derived --------------------------------------------------------
-    @property
-    def is_production(self) -> bool:
-        return self.env == "production"
-
-    @property
-    def base_url(self) -> str:
-        return self.public_base_url.rstrip("/")
-
-    @property
-    def is_local_only(self) -> bool:
-        """True when visitors could not possibly reach this deployment."""
-        lowered = self.public_base_url.lower()
-        return any(
-            marker in lowered
-            for marker in ("127.0.0.1", "localhost", "0.0.0.0", "[::1]")
-        )
-
-    def share_url(self, tracking_id: str) -> str:
-        return f"{self.base_url}/l/{tracking_id}"
-
-    def qr_url(self, tracking_id: str) -> str:
-        return f"{self.base_url}/l/{tracking_id}.png"
-
-    # -- construction ---------------------------------------------------
+    # ------------------------------------------------------------------
     @classmethod
-    def from_env(cls) -> "Config":
-        load_dotenv()
+    def from_env(cls, load_env_file: bool = True) -> "Config":
+        if load_env_file:
+            load_dotenv_file()
+
+        warnings: list[str] = []
 
         env = _env_str("RUK_ENV", "development").lower()
         if env not in VALID_ENVS:
-            raise ConfigError(
-                f"RUK_ENV must be one of {sorted(VALID_ENVS)} (got {env!r})"
-            )
+            raise ConfigError(f"RUK_ENV must be one of {sorted(VALID_ENVS)}, got {env!r}")
 
         secret_key = _env_str("SECRET_KEY")
         secret_source = "environment"
-        if not secret_key or _looks_like_placeholder(secret_key):
+        if not secret_key:
             if env == "production":
                 raise ConfigError(
-                    "SECRET_KEY must be set to at least "
-                    f"{MIN_SECRET_LENGTH} characters in production. Generate one:"
-                    " python -c \"import secrets; print(secrets.token_hex(32))\""
+                    "SECRET_KEY is required when RUK_ENV=production. "
+                    'Generate one with: python -c "import secrets; print(secrets.token_urlsafe(64))"'
                 )
             secret_key, secret_source = _load_or_create_local_secret()
-        if len(secret_key) < MIN_SECRET_LENGTH:
-            raise ConfigError(
-                f"SECRET_KEY must be at least {MIN_SECRET_LENGTH} characters "
-                f"(got {len(secret_key)})"
-            )
 
-        bind_port = _env_int("BIND_PORT", 8000, minimum=1, maximum=65535)
+        if len(secret_key) < 32:
+            raise ConfigError("SECRET_KEY must be at least 32 characters long")
+
+        bind_port = _env_int("BIND_PORT", 8000)
+        if not 1 <= bind_port <= 65535:
+            raise ConfigError(f"BIND_PORT out of range: {bind_port}")
+
         bind_host = _env_str("BIND_HOST", "127.0.0.1") or "127.0.0.1"
 
         public_base_url = _env_str(
-            "PUBLIC_BASE_URL", f"http://{bind_host}:{bind_port}"
+            "PUBLIC_BASE_URL", f"http://127.0.0.1:{bind_port}"
         ).rstrip("/")
         if not public_base_url.startswith(("http://", "https://")):
             raise ConfigError(
@@ -247,119 +151,145 @@ class Config:
                 f"(got {public_base_url!r})"
             )
 
-        is_prod = env == "production"
-        if is_prod and not public_base_url.startswith("https://"):
+        ip_mode = _env_str("IP_STORAGE_MODE", "full").lower()
+        if ip_mode not in VALID_IP_MODES:
             raise ConfigError(
-                "PUBLIC_BASE_URL must use https:// in production, because "
-                "tracking links carry a consent notice and session cookies"
-            )
-
-        ip_storage_mode = _env_str("IP_STORAGE_MODE", "full").lower()
-        if ip_storage_mode not in VALID_IP_MODES:
-            raise ConfigError(
-                f"IP_STORAGE_MODE must be one of {sorted(VALID_IP_MODES)} "
-                f"(got {ip_storage_mode!r})"
+                f"IP_STORAGE_MODE must be one of {sorted(VALID_IP_MODES)}, got {ip_mode!r}"
             )
 
         geo_provider = _env_str("GEO_PROVIDER", "none").lower()
         if geo_provider not in VALID_GEO_PROVIDERS:
             raise ConfigError(
-                f"GEO_PROVIDER must be one of {sorted(VALID_GEO_PROVIDERS)} "
-                f"(got {geo_provider!r})"
+                f"GEO_PROVIDER must be one of {sorted(VALID_GEO_PROVIDERS)}, got {geo_provider!r}"
+            )
+
+        geo_db_path = _env_str("GEO_DB_PATH")
+        if geo_provider == "maxmind" and not geo_db_path:
+            raise ConfigError(
+                "GEO_PROVIDER=maxmind requires GEO_DB_PATH pointing at a "
+                "GeoLite2-City.mmdb file"
             )
 
         ip_hash_salt = _env_str("IP_HASH_SALT")
-        if not ip_hash_salt and ip_storage_mode == "hashed":
-            # Deriving from the secret is acceptable: it is already required and
-            # never leaves the host. A dedicated salt is better.
+        if ip_mode == "hashed" and not ip_hash_salt:
             ip_hash_salt = secret_key[:32]
-
-        session_cookie_secure = _env_bool("SESSION_COOKIE_SECURE", is_prod)
-        if is_prod and not session_cookie_secure:
-            raise ConfigError(
-                "SESSION_COOKIE_SECURE must be true in production, otherwise "
-                "the admin session cookie travels over plain HTTP"
+            warnings.append(
+                "IP_HASH_SALT is empty; derived it from SECRET_KEY. Set an explicit "
+                "value in production so rotating SECRET_KEY does not change every "
+                "visitor hash."
             )
 
-        database_file = _env_str("DATABASE_PATH", "data/ruk.db") or "data/ruk.db"
+        if env == "production":
+            if not public_base_url.startswith("https://"):
+                raise ConfigError(
+                    "PUBLIC_BASE_URL must use https:// in production; tracking cookies "
+                    "and admin sessions must not travel in clear text"
+                )
+            if not _env_bool("SESSION_COOKIE_SECURE", True):
+                warnings.append(
+                    "SESSION_COOKIE_SECURE is disabled in production; admin session "
+                    "cookies can leak over plain HTTP."
+                )
 
-        config = cls(
+        if bind_host not in {"127.0.0.1", "localhost", "::1"} and not _env_bool(
+            "TRUST_PROXY_HEADERS", False
+        ):
+            warnings.append(
+                f"BIND_HOST={bind_host} exposes the app beyond localhost. Put it behind "
+                "an HTTPS reverse proxy and set TRUST_PROXY_HEADERS=true only when "
+                "that proxy is trusted."
+            )
+
+        retention_days = _env_int("DEFAULT_RETENTION_DAYS", 90)
+        if retention_days < 1:
+            raise ConfigError("DEFAULT_RETENTION_DAYS must be at least 1")
+
+        return cls(
             env=env,
             secret_key=secret_key,
             secret_source=secret_source,
             bind_host=bind_host,
             bind_port=bind_port,
             public_base_url=public_base_url,
-            require_https_links=_env_bool("REQUIRE_HTTPS_LINKS", is_prod),
-            database_file=database_file,
+            require_https_links=_env_bool("REQUIRE_HTTPS_LINKS", env == "production"),
+            database_path=_env_str("DATABASE_PATH", "data/ruk_shadow.db"),
             trust_proxy_headers=_env_bool("TRUST_PROXY_HEADERS", False),
-            ip_storage_mode=ip_storage_mode,
+            ip_storage_mode=ip_mode,
             ip_hash_salt=ip_hash_salt,
             geo_provider=geo_provider,
-            geo_db_path=_env_str("GEO_DB_PATH"),
-            geo_http_endpoint=_env_str("GEO_HTTP_ENDPOINT"),
-            default_retention_days=_env_int(
-                "DEFAULT_RETENTION_DAYS", 90, minimum=1, maximum=3650
+            geo_db_path=geo_db_path,
+            geo_http_endpoint=_env_str(
+                "GEO_HTTP_ENDPOINT",
+                "https://ip-api.com/json/{ip}?fields=status,country,regionName,city",
             ),
-            retention_sweep_seconds=_env_int(
-                "RETENTION_SWEEP_SECONDS", 3600, minimum=60
+            default_retention_days=retention_days,
+            retention_sweep_seconds=_env_int("RETENTION_SWEEP_SECONDS", 3600),
+            session_lifetime_seconds=_env_int("SESSION_LIFETIME_SECONDS", 3600),
+            session_cookie_secure=_env_bool(
+                "SESSION_COOKIE_SECURE", env == "production"
             ),
-            session_lifetime_seconds=_env_int(
-                "SESSION_LIFETIME_SECONDS", 3600, minimum=300
-            ),
-            session_cookie_secure=session_cookie_secure,
-            login_rate_limit=_env_int("LOGIN_RATE_LIMIT", 8, minimum=1),
-            login_rate_window=_env_int("LOGIN_RATE_WINDOW", 300, minimum=1),
-            public_rate_limit=_env_int("PUBLIC_RATE_LIMIT", 120, minimum=1),
-            public_rate_window=_env_int("PUBLIC_RATE_WINDOW", 60, minimum=1),
-            policy_version=_env_str("POLICY_VERSION", "1.0") or "1.0",
+            login_rate_limit=_env_int("LOGIN_RATE_LIMIT", 8),
+            login_rate_window=_env_int("LOGIN_RATE_WINDOW", 300),
+            public_rate_limit=_env_int("PUBLIC_RATE_LIMIT", 120),
+            public_rate_window=_env_int("PUBLIC_RATE_WINDOW", 60),
+            policy_version=_env_str("POLICY_VERSION", "1.0"),
+            warnings=warnings,
         )
-        config.warnings = _collect_warnings(config)
-        return config
+
+    # ------------------------------------------------------------------
+    @property
+    def is_production(self) -> bool:
+        return self.env == "production"
+
+    @property
+    def database_file(self) -> Path:
+        path = Path(self.database_path)
+        return path if path.is_absolute() else PROJECT_ROOT / path
+
+    @property
+    def public_base(self) -> str:
+        return self.public_base_url.rstrip("/")
+
+    def share_url(self, tracking_id: str) -> str:
+        return f"{self.public_base}/l/{tracking_id}"
+
+    def qr_url(self, tracking_id: str) -> str:
+        return f"{self.public_base}/l/{tracking_id}.png"
+
+    def describe(self) -> list[tuple[str, str]]:
+        """Human-readable settings table for the terminal UI (no secrets)."""
+        return [
+            ("Environment", self.env),
+            ("Bind address", f"{self.bind_host}:{self.bind_port}"),
+            ("Public base URL", self.public_base),
+            ("Database", str(self.database_file)),
+            ("Secret source", self.secret_source),
+            ("IP storage", self.ip_storage_mode),
+            ("Geolocation", self.geo_provider),
+            ("Trust proxy headers", str(self.trust_proxy_headers)),
+            ("HTTPS links required", str(self.require_https_links)),
+            ("Retention (days)", str(self.default_retention_days)),
+            ("Session lifetime (s)", str(self.session_lifetime_seconds)),
+            ("Policy version", self.policy_version),
+        ]
 
 
-def _collect_warnings(config: Config) -> list[str]:
-    """Non-fatal problems worth putting in front of the operator."""
-    out: list[str] = []
+def _load_or_create_local_secret() -> tuple[str, str]:
+    """Return (secret, source). Creates .ruk_secret with mode 0600 on first run."""
+    path = PROJECT_ROOT / ".ruk_secret"
+    if path.exists():
+        value = path.read_text(encoding="utf-8").strip()
+        if len(value) >= 32:
+            _harden_permissions(path)
+            return value, "file:.ruk_secret"
+    value = secrets.token_urlsafe(48)
+    path.write_text(value + "\n", encoding="utf-8")
+    _harden_permissions(path)
+    return value, "file:.ruk_secret (created)"
 
-    if config.is_local_only:
-        out.append(
-            "PUBLIC_BASE_URL points at this machine, so tracking links will "
-            "only work on this machine until you set a reachable address."
-        )
-    if config.env != "production" and not config.is_local_only:
-        out.append(
-            f"RUK_ENV is {config.env!r}: the development server is not hardened "
-            "for public traffic. Use a reverse proxy in production."
-        )
-    if config.ip_storage_mode == "full":
-        out.append(
-            "IP_STORAGE_MODE=full stores complete visitor addresses. Consider "
-            "truncated, hashed or none."
-        )
-    if config.geo_provider == "http" and not config.geo_http_endpoint:
-        out.append(
-            "GEO_PROVIDER=http but GEO_HTTP_ENDPOINT is empty, so no location "
-            "will ever be recorded."
-        )
-    if config.geo_provider == "http":
-        out.append(
-            "GEO_PROVIDER=http sends visitor IP addresses to an external "
-            "service. Disclose this in your privacy notice."
-        )
-    if config.geo_provider == "maxmind" and not config.geo_db_path:
-        out.append(
-            "GEO_PROVIDER=maxmind but GEO_DB_PATH is empty, so no location "
-            "will ever be recorded."
-        )
-    if config.ip_storage_mode == "hashed" and not _env_str("IP_HASH_SALT"):
-        out.append(
-            "IP_HASH_SALT is unset, so the hash salt is derived from "
-            "SECRET_KEY. Setting a dedicated salt is preferable."
-        )
-    if config.trust_proxy_headers:
-        out.append(
-            "TRUST_PROXY_HEADERS=true: X-Forwarded-For is believed. Only keep "
-            "this on behind your own reverse proxy."
-        )
-    return out
+
+def _harden_permissions(path: Path) -> None:
+    try:
+        path.chmod(0o600)
+    except OSError:  # pragma: no cover - platform dependent
+        pass
