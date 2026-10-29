@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Before you continue · {{ product_name }}{% endblock %}
+{% block body_class %}page-consent{% endblock %}
+
+{% block content %}
+<div class="consent-wrap">
+  <div class="consent-head">
+    <p class="eyebrow">Consent required</p>
+    <h1>This link records anonymous analytics</h1>
+    <p class="lead">
+      You are about to be taken to <strong>{{ destination_host }}</strong>.
+      The person who created this link would like to record a small amount of
+      information about this visit. Nothing is recorded unless you choose
+      <em>Allow</em> below.
+    </p>
+  </div>
+
+  <div class="consent-grid">
+    <section class="panel">
+      <h2>If you allow it, this is recorded</h2>
+      <ul class="tight">
+        {% for item in notice.records %}<li>{{ item }}</li>{% endfor %}
+      </ul>
+      <p class="muted small">{{ notice.ip_notice }} {{ notice.geo_notice }}</p>
+    </section>
+
+    <section class="panel panel-warn">
+      <h2>This is never collected</h2>
+      <ul class="tight">
+        {% for item in notice.never_collects %}<li>{{ item }}</li>{% endfor %}
+      </ul>
+    </section>
+  </div>
+
+  <section class="panel panel-meta">
+    <dl class="meta-grid">
+      <div><dt>Link</dt><dd><code>{{ link.tracking_id }}</code></dd></div>
+      <div><dt>Campaign</dt><dd>{{ link.campaign_name or '—' }}</dd></div>
+      <div><dt>Kept for</dt><dd>{{ link.retention_days }} days</dd></div>
+      <div><dt>Policy version</dt><dd>{{ notice.policy_version }}</dd></div>
+    </dl>
+    <p class="muted small">{{ geo_note }}</p>
+  </section>
+
+  <form method="post" action="{{ url_for('public_link_submit', tracking_id=link.tracking_id) }}" class="consent-actions">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <button type="submit" name="choice" value="agree" class="btn btn-primary btn-lg">
+      Allow and continue
+    </button>
+    <button type="submit" name="choice" value="decline" class="btn btn-ghost btn-lg">
+      Leave without being counted
+    </button>
+  </form>
+
+  <p class="muted small center">
+    Choosing <em>Leave without being counted</em> takes you to the same destination.
+    Your visit is not recorded, and no cookie is set.
+  </p>
+  <p class="muted small center">
+    <a href="{{ url_for('privacy') }}">Full privacy notice</a>
+  </p>
+</div>
+{% endblock %}

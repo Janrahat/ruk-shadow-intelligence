@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · {{ product_name }}{% endblock %}
+{% block body_class %}page-admin{% endblock %}
+
+{% block content %}
+<div class="admin-head">
+  <div>
+    <p class="eyebrow">Live intelligence</p>
+    <h1>Dashboard</h1>
+  </div>
+  <div class="live-pill" id="live-pill">
+    <span class="dot" id="live-dot"></span>
+    <span id="live-text">connecting…</span>
+  </div>
+</div>
+
+{% for warning in warnings %}
+  <div class="alert alert-warn">{{ warning }}</div>
+{% endfor %}
+
+<section class="stats" aria-label="Overview">
+  <div class="stat">
+    <span class="stat-label">Total visits</span>
+    <strong class="stat-value" id="stat-total">{{ totals.total_events }}</strong>
+    <span class="stat-foot">{{ totals.events_24h }} in the last 24h</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Unique events</span>
+    <strong class="stat-value" id="stat-unique">{{ totals.unique_events }}</strong>
+    <span class="stat-foot">{{ totals.events_7d }} in the last 7d</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Active links</span>
+    <strong class="stat-value" id="stat-links">{{ totals.active_links }}</strong>
+    <span class="stat-foot">of {{ totals.total_links }} created</span>
+  </div>
+  <div class="stat">
+    <span class="stat-label">Campaigns</span>
+    <strong class="stat-value" id="stat-campaigns">{{ totals.campaigns }}</strong>
+    <span class="stat-foot">consent rate {{ totals.consent_rate }}%</span>
+  </div>
+</section>
+
+<section class="split">
+  <div class="panel">
+    <div class="panel-head">
+      <h2>Traffic · last 24 hours</h2>
+      <span class="muted small">hourly buckets</span>
+    </div>
+    <div class="chart" id="traffic-chart"
+         data-series='{{ series|tojson }}'
+         role="img"
+         aria-label="Hourly visit counts for the last 24 hours">
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h2>Device mix</h2></div>
+    {% if devices %}
+      <ul class="bars">
+        {% for row in devices %}
+          <li>
+            <span class="bar-label">{{ row.label }}</span>
+            <span class="bar-track"><span class="bar-fill" style="width: {{ row.share }}%"></span></span>
+            <span class="bar-value">{{ row.count }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">No events recorded yet.</p>
+    {% endif %}
+  </div>
+</section>
+
+<section class="split">
+  <div class="panel">
+    <div class="panel-head">
+      <h2>Live click feed</h2>
+      <span class="muted small">server-sent events</span>
+    </div>
+    <div class="feed" id="feed" data-stream="{{ url_for('admin_stream') }}">
+      {% for event in events %}
+        <article class="feed-row">
+          <time>{{ event.created_at }}</time>
+          <span class="tag">{{ event.campaign_name or 'no campaign' }}</span>
+          <span>{{ event.location_label }}</span>
+          <span>{{ event.browser_family }} {{ event.browser_version }}</span>
+          <span class="chip chip-{{ event.device_category }}">{{ event.device_category }}</span>
+          <span class="chip chip-consent">{{ event.consent_status }}</span>
+        </article>
+      {% else %}
+        <p class="feed-empty" id="feed-empty">
+          Waiting for the first authorised visit. Open one of your links to see it appear here.
+        </p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h2>Top browsers</h2></div>
+    {% if browsers %}
+      <ul class="bars">
+        {% for row in browsers %}
+          <li>
+            <span class="bar-label">{{ row.label }}</span>
+            <span class="bar-track"><span class="bar-fill bar-alt" style="width: {{ row.share }}%"></span></span>
+            <span class="bar-value">{{ row.count }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">No events recorded yet.</p>
+    {% endif %}
+
+    <div class="panel-head"><h2>Countries</h2></div>
+    {% if countries %}
+      <ul class="bars">
+        {% for row in countries %}
+          <li>
+            <span class="bar-label">{{ row.label }}</span>
+            <span class="bar-track"><span class="bar-fill bar-gold" style="width: {{ row.share }}%"></span></span>
+            <span class="bar-value">{{ row.count }}</span>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted small">No geographic data. {{ geo_status }}.</p>
+    {% endif %}
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>Recent links</h2>
+    <a class="btn btn-ghost btn-sm" href="{{ url_for('admin_links') }}">Manage links</a>
+  </div>
+  {% if links %}
+    <div class="table-scroll">
+      <table>
+        <thead>
+          <tr><th>Tracking ID</th><th>Campaign</th><th>Destination</th><th>Visits</th><th>Unique</th><th></th></tr>
+        </thead>
+        <tbody>
+          {% for link in links %}
+            <tr>
+              <td><code>{{ link.tracking_id }}</code></td>
+              <td>{{ link.campaign_name or '—' }}</td>
+              <td class="truncate" title="{{ link.destination_url }}">{{ link.destination_url }}</td>
+              <td>{{ link.click_count }}</td>
+              <td>{{ link.unique_count }}</td>
+              <td><a href="{{ cfg.share_url(link.tracking_id) }}" target="_blank" rel="noopener">open</a></td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="muted">No links yet. <a href="{{ url_for('admin_links') }}">Create the first one</a>.</p>
+  {% endif %}
+</section>
+
+<p class="muted small">{{ geo_note }}</p>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/dashboard.js') }}" defer></script>
+{% endblock %}

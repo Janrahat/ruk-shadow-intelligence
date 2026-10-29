@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Privacy notice · {{ product_name }}{% endblock %}
+{% block body_class %}page-public{% endblock %}
+
+{% block content %}
+<div class="doc">
+  <p class="eyebrow">Privacy notice · policy {{ notice.policy_version }}</p>
+  <h1>Privacy notice</h1>
+  <p class="lead">
+    This page describes exactly what RUK SHADOW INTELLIGENCE records when you open
+    a tracking link, and what it does not. It is generated from the running
+    configuration, so it cannot drift away from what the software actually does.
+  </p>
+
+  <h2>1. What is recorded, and only after you allow it</h2>
+  <ul>
+    {% for item in notice.records %}<li>{{ item }}</li>{% endfor %}
+  </ul>
+
+  <h2>2. Your IP address</h2>
+  <p>{{ notice.ip_notice }}</p>
+  <p class="muted small">
+    Current setting: <code>IP_STORAGE_MODE={{ notice.ip_policy }}</code>.
+    An operator can change this; the sentence above always reflects the live value.
+  </p>
+
+  <h2>3. Approximate location</h2>
+  <p>{{ notice.geo_notice }}</p>
+  <p class="muted small">{{ geo_note }}</p>
+
+  <h2>4. What is never collected</h2>
+  <ul>
+    {% for item in notice.never_collects %}<li>{{ item }}</li>{% endfor %}
+  </ul>
+  <p>
+    Precise GPS coordinates are never requested. This software does not call the
+    browser location API, does not access your camera or microphone, and cannot
+    read your files, contacts or messages.
+  </p>
+
+  <h2>5. How long it is kept</h2>
+  <p>
+    Analytics records are deleted after {{ notice.retention_days }} days by default.
+    An individual link can specify a shorter window. Consent records are deleted on
+    their own, longer schedule so that a withdrawal can still be honoured later.
+  </p>
+
+  <h2>6. Your choices</h2>
+  <p>
+    You choose at the notice page whether to allow recording. Declining still takes
+    you to the destination; it simply records nothing. Because no identifier is
+    stored when you decline, there is no record to delete afterwards.
+  </p>
+  <p>
+    If you allowed recording and want it erased, contact the operator of the site
+    that sent you the link and quote the tracking identifier shown on the notice
+    page. The operator has a one-step erasure control in their dashboard.
+  </p>
+
+  <h2>7. What this system cannot do</h2>
+  <p>{{ geo_note }}</p>
+  <p>
+    It cannot identify you as a person. It cannot read your passwords, sessions,
+    messages or files. It cannot see anything you do after you leave the
+    destination page.
+  </p>
+</div>
+{% endblock %}
