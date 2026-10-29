@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}{{ status }} link · {{ product_name }}{% endblock %}
+{% block body_class %}page-public{% endblock %}
+
+{% block content %}
+<div class="center-block">
+  <p class="eyebrow">{{ status }}</p>
+  <h1>This link is no longer active</h1>
+  <p class="lead">
+    The link <code>{{ link.tracking_id }}</code> has been {{ status|lower }} by its owner.
+    No analytics are being recorded for it.
+  </p>
+  <p class="muted">
+    If you followed this link expecting to reach a page, contact whoever sent it to you.
+  </p>
+</div>
+{% endblock %}

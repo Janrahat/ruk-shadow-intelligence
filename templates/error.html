@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}{{ code }} · {{ product_name }}{% endblock %}
+{% block body_class %}page-public{% endblock %}
+
+{% block content %}
+<div class="center-block">
+  <p class="eyebrow">Error {{ code }}</p>
+  <h1>{{ title }}</h1>
+  <p class="lead">{{ detail }}</p>
+  <div class="hero-actions">
+    <a class="btn btn-primary" href="{{ url_for('index') }}">Home</a>
+    <a class="btn btn-ghost" href="{{ url_for('admin_login') }}">Sign in</a>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="ruk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="robots" content="noindex, nofollow">
+  <title>{% block title %}{{ product_name }}{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body class="{% block body_class %}{% endblock %}">
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">◈</span>
+      <span class="brand-text">
+        <strong>RUK</strong> SHADOW <em>INTELLIGENCE</em>
+      </span>
+    </div>
+    <nav class="topnav" aria-label="Main">
+      {% if is_admin %}
+        <a href="{{ url_for('admin_dashboard') }}">Dashboard</a>
+        <a href="{{ url_for('admin_links') }}">Links</a>
+        <a href="{{ url_for('admin_campaigns') }}">Campaigns</a>
+        <a href="{{ url_for('admin_events') }}">Events</a>
+        <a href="{{ url_for('admin_privacy') }}">Privacy</a>
+        <span class="nav-user">{{ admin_name }}</span>
+        <a class="nav-out" href="{{ url_for('admin_logout') }}">Sign out</a>
+      {% endif %}
+    </nav>
+  </header>
+
+  <main id="main">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="footer">
+    <span>RUK SHADOW INTELLIGENCE · consent-based link analytics</span>
+    <a href="{{ url_for('privacy') }}">Privacy notice</a>
+  </footer>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

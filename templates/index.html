@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}RUK SHADOW INTELLIGENCE{% endblock %}
+{% block body_class %}page-public{% endblock %}
+
+{% block content %}
+<section class="hero">
+  <div class="hero-inner">
+    <p class="eyebrow">Consent-based analytics platform</p>
+    <h1 class="hero-title"><span class="glow">RUK</span> SHADOW INTELLIGENCE</h1>
+    <p class="hero-sub">
+      A self-hosted link analytics engine for Kali Linux and Termux. Every visit is
+      recorded only after the person it belongs to has read a plain-language notice
+      and chosen to allow it.
+    </p>
+    <div class="hero-actions">
+      <a class="btn btn-primary" href="{{ url_for('admin_login') }}">Open the dashboard</a>
+      <a class="btn btn-ghost" href="{{ url_for('privacy') }}">Read the privacy notice</a>
+    </div>
+  </div>
+</section>
+
+<section class="grid grid-3">
+  <article class="card">
+    <h2 class="card-title">What a visitor sees</h2>
+    <p>
+      Opening a tracking link shows a notice page <em>before</em> anything is recorded:
+      what will be collected, why, how long it is kept, and a plain “Leave without
+      being counted” button.
+    </p>
+  </article>
+  <article class="card">
+    <h2 class="card-title">What is recorded</h2>
+    <ul class="tight">
+      {% for item in notice.records %}<li>{{ item }}</li>{% endfor %}
+    </ul>
+  </article>
+  <article class="card">
+    <h2 class="card-title">What is never recorded</h2>
+    <ul class="tight muted-list">
+      {% for item in notice.never_collects %}<li>{{ item }}</li>{% endfor %}
+    </ul>
+  </article>
+</section>
+
+<section class="panel notice-panel">
+  <h2>Honest limits of this system</h2>
+  <p>{{ geo_note }}</p>
+  <p class="muted">
+    {{ notice.geo_notice }} {{ notice.ip_notice }}
+  </p>
+  <p class="muted">
+    Links only collect data once this server is reachable from the internet over
+    HTTPS. A deployment bound to <code>127.0.0.1</code> cannot receive visitors
+    from outside the machine it runs on — that is a fact about networking, not a
+    setting you can toggle.
+  </p>
+</section>
+{% endblock %}
