@@ -1,0 +1,49 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.so
+
+# Virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Application secrets - never commit these
+.env
+.env.*
+!.env.example
+.ruk_secret
+*.pem
+*.key
+
+# Local database (contains real visitor records)
+data/
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Generated output
+reports/*.csv
+reports/*.json
+reports/*.html
+qr_codes/*.png
+!reports/.gitkeep
+!qr_codes/.gitkeep
+
+# Test and coverage artefacts
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Editor / OS noise
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
